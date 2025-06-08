@@ -2,10 +2,7 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION = 'il-central-1'
-        ECR_REPO = 'oleg/helm/nginx'
-        IMAGE_NAME = 'nginx'
-        VAULT_SECRET_PATH = 'aws-creds/oleg' // Adjusted for Vault plugin format
+        IMAGE_NAME = "nginx"
     }
 
     stages {
@@ -18,20 +15,8 @@ pipeline {
         stage('Set Version') {
             steps {
                 script {
-                    def versionFile = 'VERSION'
-                    def version = '0.1'
-                    if (fileExists(versionFile)) {
-                        version = readFile(versionFile).trim()
-                        def (major, minor) = version.tokenize('.')
-                        minor = minor.toInteger() + 1
-                        if (minor > 9) {
-                            major = major.toInteger() + 1
-                            minor = 0
-                        }
-                        version = "${major}.${minor}"
-                    }
-                    writeFile file: versionFile, text: version
-                    env.IMAGE_TAG = version
+                    def version = readFile('version.txt').trim()
+                    env.VERSION = version
                 }
             }
         }
@@ -39,7 +24,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    def dockerImage = docker.build("${IMAGE_NAME}:${env.IMAGE_TAG}")
+                    docker.build("${IMAGE_NAME}:${VERSION}")
                 }
             }
         }
@@ -49,7 +34,7 @@ pipeline {
                 script {
                     withVault([
                         vaultSecrets: [[
-                            path: 'aws-creds/data/oleg',
+                            path: 'aws-creds/data/oleg', // <-- Adjust path if needed
                             engineVersion: 2,
                             secretValues: [
                                 [vaultKey: 'AWS_ACCESS_KEY_ID', envVar: 'AWS_ACCESS_KEY_ID'],
@@ -57,7 +42,8 @@ pipeline {
                             ]
                         ]]
                     ]) {
-                        echo "Successfully retrieved AWS credentials from Vault"
+                        echo "AWS credentials loaded from Vault."
+                        // You can now use AWS CLI or Docker login to ECR with these env vars
                     }
                 }
             }
@@ -65,27 +51,20 @@ pipeline {
 
         stage('Login to ECR') {
             steps {
-                script {
-                    sh '''
-                        aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-                        aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-                        aws configure set default.region $AWS_REGION
-
-                        aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $(aws sts get-caller-identity --query Account --output text).dkr.ecr.$AWS_REGION.amazonaws.com
-                    '''
-                }
+                sh '''
+                    aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+                    aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+                    aws ecr get-login-password --region il-central-1 | docker login --username AWS --password-stdin 314525640319.dkr.ecr.il-central-1.amazonaws.com
+                '''
             }
         }
 
         stage('Push to ECR') {
             steps {
-                script {
-                    def accountId = sh(script: "aws sts get-caller-identity --query Account --output text", returnStdout: true).trim()
-                    def ecrRepoUri = "${accountId}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
-                    sh "docker tag ${IMAGE_NAME}:${env.IMAGE_TAG} ${ecrRepoUri}:${env.IMAGE_TAG}"
-                    sh "docker push ${ecrRepoUri}:${env.IMAGE_TAG}"
-                    env.ECR_IMAGE_URI = "${ecrRepoUri}:${env.IMAGE_TAG}"
-                }
+                sh '''
+                    docker tag ${IMAGE_NAME}:${VERSION} 314525640319.dkr.ecr.il-central-1.amazonaws.com/imtech-oleg:${VERSION}
+                    docker push 314525640319.dkr.ecr.il-central-1.amazonaws.com/imtech-oleg:${VERSION}
+                '''
             }
         }
     }

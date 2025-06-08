@@ -48,8 +48,6 @@ pipeline {
             steps {
                 script {
                     withVault([
-                        configuration: [vaultUrl: 'http://vault:8200', engineVersion: 2],
-                        credentialsId: 'vault-token', // This must match the ID of the token you created in Jenkins credentials
                         vaultSecrets: [[
                             path: 'aws-creds/data/oleg',
                             engineVersion: 2,
@@ -59,11 +57,12 @@ pipeline {
                             ]
                         ]]
                     ]) {
-                        echo "AWS credentials loaded from Vault"
+                        echo "Got AWS credentials from Vault"
                     }
                 }
             }
         }
+
 
         stage('Login to ECR') {
             steps {

@@ -6,15 +6,11 @@ pipeline {
         ECR_REPO           = 'oleg/helm/nginx'
         IMAGE_NAME         = 'nginx'
         VAULT_ADDR         = 'http://vault:8200'
-        VAULT_SECRET_PATH  = 'aws-creds/data/oleg'      // Vault KV v2 path (omit /v1/)
+        VAULT_SECRET_PATH  = 'aws-creds/data/oleg'
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
+        stage('Checkout') { steps { checkout scm } }
 
         stage('Set Version') {
             steps {
@@ -26,8 +22,7 @@ pipeline {
                         def (major, minor) = version.tokenize('.')
                         minor = minor.toInteger() + 1
                         if (minor > 9) {
-                            major = major.toInteger() + 1
-                            minor = 0
+                            major = major.toInteger() + 1; minor = 0
                         }
                         version = "${major}.${minor}"
                     }
@@ -39,9 +34,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                script {
-                    def dockerImage = docker.build("${IMAGE_NAME}:${env.IMAGE_TAG}")
-                }
+                script { def dockerImage = docker.build("${IMAGE_NAME}:${env.IMAGE_TAG}") }
             }
         }
 
@@ -49,20 +42,24 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'vault-token', variable: 'VAULT_TOKEN')]) {
                     script {
-                        // Call Vault KV v2 endpoint and parse out the AWS keys
                         def resp = httpRequest(
                             httpMode: 'GET',
                             url: "${VAULT_ADDR}/v1/${VAULT_SECRET_PATH}",
                             customHeaders: [[name: 'X-Vault-Token', value: VAULT_TOKEN]],
                             validResponseCodes: '200'
                         )
+                        echo "🔍 Vault raw response: ${resp.content}"
                         def json = readJSON text: resp.content
-                        if (json.data?.data?.AWS_ACCESS_KEY_ID && json.data?.data?.AWS_SECRET_ACCESS_KEY) {
-                            env.AWS_ACCESS_KEY_ID     = json.data.data.AWS_ACCESS_KEY_ID
-                            env.AWS_SECRET_ACCESS_KEY = json.data.data.AWS_SECRET_ACCESS_KEY
-                            echo "✅ Retrieved AWS creds from Vault"
+                        def data = json.data?.data
+                        if (data && data.AWS_ACCESS_KEY_ID && data.AWS_SECRET_ACCESS_KEY) {
+                            env.AWS_ACCESS_KEY_ID     = data.AWS_ACCESS_KEY_ID
+                            env.AWS_SECRET_ACCESS_KEY = data.AWS_SECRET_ACCESS_KEY
+                            echo "✅ Retrieved AWS credentials from Vault"
                         } else {
-                            error "AWS credentials not found in Vault response"
+                            error """
+                            ❌ AWS credentials not found in Vault response!
+                            Response was: ${resp.content}
+                            """
                         }
                     }
                 }
@@ -86,8 +83,8 @@ pipeline {
         stage('Push to ECR') {
             steps {
                 script {
-                    def accountId  = sh(script: "aws sts get-caller-identity --query Account --output text", returnStdout: true).trim()
-                    def ecrUri     = "${accountId}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
+                    def accountId = sh(script: "aws sts get-caller-identity --query Account --output text", returnStdout: true).trim()
+                    def ecrUri    = "${accountId}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
                     sh """
                         docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${ecrUri}:${IMAGE_TAG}
                         docker push ${ecrUri}:${IMAGE_TAG}
@@ -97,6 +94,6 @@ pipeline {
             }
         }
 
-        // … add your Helm update, KUBECONFIG export, and helm install stages here …
+        // … (then add your Helm update, KUBECONFIG export, helm install/upgrade) …
     }
 }

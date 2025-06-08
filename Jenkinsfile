@@ -48,16 +48,18 @@ pipeline {
             steps {
                 script {
                     withVault([
-                        vaultCredentialId: 'vault-token',
+                        configuration: [vaultUrl: 'http://vault:8200', engineVersion: 2],
+                        credentialsId: 'vault-token', // This must match the ID of the token you created in Jenkins credentials
                         vaultSecrets: [[
-                            path: "${VAULT_SECRET_PATH}",
+                            path: 'aws-creds/data/oleg',
+                            engineVersion: 2,
                             secretValues: [
-                                [envVar: 'AWS_ACCESS_KEY_ID', vaultKey: 'AWS_ACCESS_KEY_ID'],
-                                [envVar: 'AWS_SECRET_ACCESS_KEY', vaultKey: 'AWS_SECRET_ACCESS_KEY']
+                                [vaultKey: 'AWS_ACCESS_KEY_ID', envVar: 'AWS_ACCESS_KEY_ID'],
+                                [vaultKey: 'AWS_SECRET_ACCESS_KEY', envVar: 'AWS_SECRET_ACCESS_KEY']
                             ]
                         ]]
                     ]) {
-                        echo "AWS credentials retrieved from Vault"
+                        echo "AWS credentials loaded from Vault"
                     }
                 }
             }

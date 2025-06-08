@@ -48,6 +48,7 @@ pipeline {
             steps {
                 script {
                     withVault([
+                        vaultCredentialId: 'vault-token',
                         vaultSecrets: [[
                             path: "${VAULT_SECRET_PATH}",
                             secretValues: [

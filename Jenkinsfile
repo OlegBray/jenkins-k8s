@@ -57,12 +57,11 @@ pipeline {
                             ]
                         ]]
                     ]) {
-                        echo "Got AWS credentials from Vault"
+                        echo "Successfully retrieved AWS credentials from Vault"
                     }
                 }
             }
         }
-
 
         stage('Login to ECR') {
             steps {

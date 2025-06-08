@@ -10,7 +10,9 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') { steps { checkout scm } }
+        stage('Checkout') {
+            steps { checkout scm }
+        }
 
         stage('Set Version') {
             steps {
@@ -22,7 +24,8 @@ pipeline {
                         def (major, minor) = version.tokenize('.')
                         minor = minor.toInteger() + 1
                         if (minor > 9) {
-                            major = major.toInteger() + 1; minor = 0
+                            major = major.toInteger() + 1
+                            minor = 0
                         }
                         version = "${major}.${minor}"
                     }
@@ -34,7 +37,9 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                script { def dockerImage = docker.build("${IMAGE_NAME}:${env.IMAGE_TAG}") }
+                script {
+                    def dockerImage = docker.build("${IMAGE_NAME}:${env.IMAGE_TAG}")
+                }
             }
         }
 
@@ -42,6 +47,7 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'vault-token', variable: 'VAULT_TOKEN')]) {
                     script {
+                        // 1. Query Vault
                         def resp = httpRequest(
                             httpMode: 'GET',
                             url: "${VAULT_ADDR}/v1/${VAULT_SECRET_PATH}",
@@ -49,16 +55,20 @@ pipeline {
                             validResponseCodes: '200'
                         )
                         echo "🔍 Vault raw response: ${resp.content}"
+
+                        // 2. Parse JSON
                         def json = readJSON text: resp.content
                         def data = json.data?.data
-                        if (data && data.AWS_ACCESS_KEY_ID && data.AWS_SECRET_ACCESS_KEY) {
-                            env.AWS_ACCESS_KEY_ID     = data.AWS_ACCESS_KEY_ID
-                            env.AWS_SECRET_ACCESS_KEY = data.AWS_SECRET_ACCESS_KEY
-                            echo "✅ Retrieved AWS credentials from Vault"
+                        
+                        // 3. Extract the correct keys
+                        if (data?.access_key_id && data?.secret_access_key) {
+                            env.AWS_ACCESS_KEY_ID     = data.access_key_id
+                            env.AWS_SECRET_ACCESS_KEY = data.secret_access_key
+                            echo "✅ Retrieved AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY from Vault"
                         } else {
                             error """
-                            ❌ AWS credentials not found in Vault response!
-                            Response was: ${resp.content}
+                                ❌ AWS credentials not found in Vault response!
+                                Response: ${resp.content}
                             """
                         }
                     }
@@ -94,6 +104,6 @@ pipeline {
             }
         }
 
-        // … (then add your Helm update, KUBECONFIG export, helm install/upgrade) …
+        // …then your Helm update, KUBECONFIG export, and helm install stages…
     }
 }

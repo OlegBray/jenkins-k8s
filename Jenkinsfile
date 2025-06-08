@@ -2,7 +2,11 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "nginx"
+        AWS_REGION         = 'il-central-1'
+        ECR_REPO           = 'oleg/helm/nginx'
+        IMAGE_NAME         = 'nginx'
+        VAULT_ADDR         = 'http://vault:8200'
+        VAULT_SECRET_PATH  = 'aws-creds/data/oleg'      // Vault KV v2 path (omit /v1/)
     }
 
     stages {
@@ -15,8 +19,20 @@ pipeline {
         stage('Set Version') {
             steps {
                 script {
-                    def version = readFile('version.txt').trim()
-                    env.VERSION = version
+                    def versionFile = 'VERSION'
+                    def version = '0.1'
+                    if (fileExists(versionFile)) {
+                        version = readFile(versionFile).trim()
+                        def (major, minor) = version.tokenize('.')
+                        minor = minor.toInteger() + 1
+                        if (minor > 9) {
+                            major = major.toInteger() + 1
+                            minor = 0
+                        }
+                        version = "${major}.${minor}"
+                    }
+                    writeFile file: versionFile, text: version
+                    env.IMAGE_TAG = version
                 }
             }
         }
@@ -24,26 +40,30 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    docker.build("${IMAGE_NAME}:${VERSION}")
+                    def dockerImage = docker.build("${IMAGE_NAME}:${env.IMAGE_TAG}")
                 }
             }
         }
 
-        stage('Get AWS Credentials from Vault') {
+        stage('Fetch AWS Credentials from Vault via HTTP') {
             steps {
-                script {
-                    withVault([
-                        vaultSecrets: [[
-                            path: 'aws-creds/data/oleg', // <-- Adjust path if needed
-                            engineVersion: 2,
-                            secretValues: [
-                                [vaultKey: 'AWS_ACCESS_KEY_ID', envVar: 'AWS_ACCESS_KEY_ID'],
-                                [vaultKey: 'AWS_SECRET_ACCESS_KEY', envVar: 'AWS_SECRET_ACCESS_KEY']
-                            ]
-                        ]]
-                    ]) {
-                        echo "AWS credentials loaded from Vault."
-                        // You can now use AWS CLI or Docker login to ECR with these env vars
+                withCredentials([string(credentialsId: 'vault-token', variable: 'VAULT_TOKEN')]) {
+                    script {
+                        // Call Vault KV v2 endpoint and parse out the AWS keys
+                        def resp = httpRequest(
+                            httpMode: 'GET',
+                            url: "${VAULT_ADDR}/v1/${VAULT_SECRET_PATH}",
+                            customHeaders: [[name: 'X-Vault-Token', value: VAULT_TOKEN]],
+                            validResponseCodes: '200'
+                        )
+                        def json = readJSON text: resp.content
+                        if (json.data?.data?.AWS_ACCESS_KEY_ID && json.data?.data?.AWS_SECRET_ACCESS_KEY) {
+                            env.AWS_ACCESS_KEY_ID     = json.data.data.AWS_ACCESS_KEY_ID
+                            env.AWS_SECRET_ACCESS_KEY = json.data.data.AWS_SECRET_ACCESS_KEY
+                            echo "✅ Retrieved AWS creds from Vault"
+                        } else {
+                            error "AWS credentials not found in Vault response"
+                        }
                     }
                 }
             }
@@ -52,20 +72,31 @@ pipeline {
         stage('Login to ECR') {
             steps {
                 sh '''
-                    aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+                    aws configure set aws_access_key_id     $AWS_ACCESS_KEY_ID
                     aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-                    aws ecr get-login-password --region il-central-1 | docker login --username AWS --password-stdin 314525640319.dkr.ecr.il-central-1.amazonaws.com
+                    aws configure set default.region        $AWS_REGION
+
+                    aws ecr get-login-password --region $AWS_REGION \
+                      | docker login --username AWS --password-stdin \
+                        $(aws sts get-caller-identity --query Account --output text).dkr.ecr.$AWS_REGION.amazonaws.com
                 '''
             }
         }
 
         stage('Push to ECR') {
             steps {
-                sh '''
-                    docker tag ${IMAGE_NAME}:${VERSION} 314525640319.dkr.ecr.il-central-1.amazonaws.com/imtech-oleg:${VERSION}
-                    docker push 314525640319.dkr.ecr.il-central-1.amazonaws.com/imtech-oleg:${VERSION}
-                '''
+                script {
+                    def accountId  = sh(script: "aws sts get-caller-identity --query Account --output text", returnStdout: true).trim()
+                    def ecrUri     = "${accountId}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
+                    sh """
+                        docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${ecrUri}:${IMAGE_TAG}
+                        docker push ${ecrUri}:${IMAGE_TAG}
+                    """
+                    env.ECR_IMAGE_URI = "${ecrUri}:${IMAGE_TAG}"
+                }
             }
         }
+
+        // … add your Helm update, KUBECONFIG export, and helm install stages here …
     }
 }

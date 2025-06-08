@@ -6,7 +6,7 @@ pipeline {
         ECR_REPO           = 'oleg/helm/nginx'
         IMAGE_NAME         = 'nginx'
         VAULT_ADDR         = 'http://vault:8200'
-        VAULT_SECRET_PATH  = 'aws-creds/data/oleg'
+        VAULT_SECRET_PATH  = 'aws-creds/data/oleg'   // Vault KV v2 path
     }
 
     stages {
@@ -114,6 +114,18 @@ pipeline {
             }
         }
 
+        stage('Create Namespace') {
+            steps {
+                withEnv(["KUBECONFIG=/tmp/eks.conf"]) {
+                    sh '''
+                        kubectl get namespace nginx-dep || \
+                          kubectl create namespace nginx-dep
+                    '''
+                    echo "📂 Namespace 'nginx-dep' ensured"
+                }
+            }
+        }
+
         stage('Update Helm Chart') {
             steps {
                 script {
@@ -133,11 +145,11 @@ pipeline {
         stage('Deploy with Helm') {
             steps {
                 withEnv(["KUBECONFIG=/tmp/eks.conf"]) {
-                    sh """
-                      helm upgrade --install nginx-deployment ./nginx-deployment \\
-                        --namespace default
-                    """
-                    echo "🚀 Helm release 'nginx-deployment' deployed/upgraded"
+                    sh '''
+                      helm upgrade --install nginx-deployment ./nginx-deployment \
+                        --namespace nginx-dep
+                    '''
+                    echo "🚀 Helm release 'nginx-deployment' deployed/upgraded in 'nginx-dep'"
                 }
             }
         }

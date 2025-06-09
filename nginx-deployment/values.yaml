@@ -1,7 +1,7 @@
 
 labels:
   app: nginx
-replicaCount: 2
+replicaCount: 1
 name: nginx
 namespace: nginx-dep
 image:

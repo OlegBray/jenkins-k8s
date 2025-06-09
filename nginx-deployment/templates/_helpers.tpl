@@ -1,25 +1,25 @@
-{{/* Chart helpers for nginx-deployment */}}
+{{/* Helper templates for chart "nginx" */}}
 
-{{- define "nginx-deployment.name" -}}
+{{- define "nginx.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
-{{- define "nginx-deployment.fullname" -}}
+{{- define "nginx.fullname" -}}
 {{- if .Values.fullnameOverride -}}
 {{-   .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
-{{-   printf "%s-%s" (include "nginx-deployment.name" .) .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{-   printf "%s-%s" (include "nginx.name" .) .Release.Name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 {{- end -}}
 
-{{- define "nginx-deployment.labels" -}}
-app.kubernetes.io/name:       {{ include "nginx-deployment.name" . }}
-helm.sh/chart:                {{ .Chart.Name }}-{{ .Chart.Version }}
-app.kubernetes.io/instance:   {{ .Release.Name }}
+{{- define "nginx.labels" -}}
+helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+app.kubernetes.io/name: {{ include "nginx.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
-{{- define "nginx-deployment.selectorLabels" -}}
-app.kubernetes.io/name:     {{ include "nginx-deployment.name" . }}
+{{- define "nginx.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "nginx.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}

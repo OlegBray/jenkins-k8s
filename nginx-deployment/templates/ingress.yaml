@@ -2,9 +2,9 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "nginx-deployment.fullname" . }}-ingress
+  name: {{ include "nginx.fullname" . }}-ingress
   labels:
-    {{- include "nginx-deployment.labels" . | nindent 4 }}
+    {{- include "nginx.labels" . | nindent 4 }}
   annotations:
     {{- with .Values.ingress.annotations }}
 {{ toYaml . | nindent 4 }}
@@ -15,11 +15,11 @@ spec:
     - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
-          - path: /oleg
+          - path: /
             pathType: Prefix
             backend:
               service:
-                name: {{ include "nginx-deployment.fullname" . }}-lb
+                name: {{ include "nginx.fullname" . }}-lb
                 port:
                   name: http
   {{- if .Values.ingress.tls }}

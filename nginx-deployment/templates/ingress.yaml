@@ -1,31 +1,31 @@
-# {{- if .Values.ingress.enabled }}
-# apiVersion: networking.k8s.io/v1
-# kind: Ingress
-# metadata:
-#   name: {{ include "nginx-deployment.fullname" . }}-ingress
-#   labels:
-#     {{- include "nginx-deployment.labels" . | nindent 4 }}
-#   annotations:
-#     {{- with .Values.ingress.annotations }}
-# {{ toYaml . | nindent 4 }}
-#     {{- end }}
-# spec:
-#   ingressClassName: {{ .Values.ingress.className | quote }}
-#   rules:
-#     - host: {{ .Values.ingress.host | quote }}
-#       http:
-#         paths:
-#           - path: /
-#             pathType: Prefix
-#             backend:
-#               service:
-#                 name: {{ include "nginx-deployment.fullname" . }}-lb
-#                 port:
-#                   name: http
-#   {{- if .Values.ingress.tls }}
-#   tls:
-#     - hosts:
-#         - {{ .Values.ingress.host | quote }}
-#       secretName: {{ .Values.ingress.tlsSecret }}
-#   {{- end }}
-# {{- end }}
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "nginx-deployment.fullname" . }}-ingress
+  labels:
+    {{- include "nginx-deployment.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.ingress.annotations }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "nginx-deployment.fullname" . }}-lb
+                port:
+                  name: http
+  {{- if .Values.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | quote }}
+      secretName: {{ .Values.ingress.tlsSecret }}
+  {{- end }}
+{{- end }}

@@ -44,7 +44,7 @@ volumes:
    persistentVolumeClaim:
     claimName: oleg-pvc
 ingress:
-  enabled: true
+  enabled: false
   className: nginx               # or your ingress controller’s class
   host: oleg-ingress-nginx
   annotations:                 

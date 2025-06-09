@@ -1,15 +1,15 @@
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "nginx-deployment.fullname" . }}-lb
-  labels:
-    {{- include "nginx-deployment.labels" . | nindent 4 }}
-spec:
-  type: LoadBalancer
-  selector:
-    {{- include "nginx-deployment.selectorLabels" . | nindent 4 }}
-  ports:
-    - port: 80
-      targetPort: http
-      protocol: TCP
-      name: http
+ apiVersion: v1
+ kind: Service
+ metadata:
++  name: {{ include "nginx.fullname" . }}-lb
++  labels:
++    {{- include "nginx.labels" . | nindent 4 }}
+ spec:
+   type: LoadBalancer
+   selector:
++    {{- include "nginx.selectorLabels" . | nindent 4 }}
+   ports:
+     - port: 80
+       targetPort: http
+       protocol: TCP
+       name: http

@@ -44,9 +44,9 @@ volumes:
    persistentVolumeClaim:
     claimName: oleg-pvc
 ingress:
-  enabled: false
+  enabled: true
   className: nginx               # or your ingress controller’s class
-  host: oleg-ingress-nginx
+  host: oleg-ingress-nginx.com
   annotations:                 
     kubernetes.io/ingress.class: nginx
   tls: false                    
